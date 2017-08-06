@@ -6,6 +6,13 @@ For example:
 
     Let's see some kanji info!
     /u/kanji-bot 桜 酒
+   
+## Future Plans
+
+* ability to recognize words, not just kanji
+* add 'words that this kanji is a part of'
+* links to relevant dictionaries/websites
+* preview kanji in a nice font
 
 ## Dictionary Data
 
@@ -13,6 +20,6 @@ This bot uses the [KANJIDIC](http://nihongo.monash.edu/kanjidic2/index.html) and
 
 ## Stroke Order Images
 
-The bot posts stroke order images when available. The source images come from the [KanjiVG project](http://kanjivg.tagaini.net/). The images are colorized using [KanjiColorizer](https://github.com/cayennes/kanji-colorize). Finally, I used [Inkscape](https://inkscape.org/) to convert them from svg to png.
+The bot posts stroke order images when available. The source images come from the [KanjiVG project](http://kanjivg.tagaini.net/). The images were colorized using [KanjiColorizer](https://github.com/cayennes/kanji-colorize). Finally, [Inkscape](https://inkscape.org/) was used to convert them from svg to png.
 
-The images should be placed in `jp-data/strokes`.
+The images should be placed in `jp-data/strokes`. I didn't include them in the repo to save space.
