@@ -27,12 +27,19 @@ import xml.etree.ElementTree as ET
 
 config = None
 kanji_data = None
-radicals = {}
+radicals = ''
+components = {}
 
 
 def load_kanji_data():
     ''' Loads dictionary data into memory. '''
 
+    print('Reading radicals... ', end='')
+    with open('jp-data/radicals', 'r') as f:
+        global radicals
+        radicals = f.read().strip()
+        print(len(radicals))
+    print('done')
     print('Reading kanjidic2.xml... ', end='')
     tree = ET.parse('jp-data/kanjidic2.xml')
     global kanji_data
@@ -42,13 +49,13 @@ def load_kanji_data():
     with open('jp-data/kradfile', 'r') as f:
         for line in f:
             parts = line.strip().split(' ')
-            radicals[parts[0]] = parts[2:]
+            components[parts[0]] = parts[2:]
     print('done')
     print('Reading kradfile2... ', end='')
     with open('jp-data/kradfile2', 'r') as f:
         for line in f:
             parts = line.strip().split(' ')
-            radicals[parts[0]] = parts[2:]
+            components[parts[0]] = parts[2:]
     print('done')
     pass
 
@@ -105,7 +112,7 @@ def get_stroke_image_url(kanji):
         return None
 
 
-def get_kanji_info(kanji):
+def get_kanji_info(kanji, compact=False):
     '''
     Returns a markdown block with information about the specified kanji.
     Will also upload a stroke order image to imgur.
@@ -117,9 +124,23 @@ def get_kanji_info(kanji):
             data = character
             break
     if data is None:
-        return '#Couldn\'t find data for kanji \''+kanji+'\''
+        return '##Couldn\'t find data for kanji \''+kanji+'\''
 
-    comment = '#'+kanji+'\n\n'
+    if compact:
+        small_separator = ' '
+        big_separator = '  \n'
+    else:
+        small_separator = ' \n'
+        big_separator = '\n\n'
+
+    comment = ''
+    if not compact:
+        comment += '##'
+    comment += kanji
+    if compact:
+        comment += ' '
+    else:
+        comment += '\n\n'
 
     rm = data.find('reading_meaning')
     comment += '**Meaning:** '
@@ -127,49 +148,73 @@ def get_kanji_info(kanji):
     for meaning in rm.iter('meaning'):
         if 'm_lang' not in meaning.attrib:
             meanings.append(meaning.text)
-    comment += ', '.join(meanings)+'\n\n'
+    comment += ', '.join(meanings)+big_separator
 
     comment += '**Onyomi:** '
     on = []
     for reading in rm.iter('reading'):
         if reading.attrib['r_type'] == 'ja_on':
             on.append(reading.text)
-    comment += '、'.join(on)+'  \n'
+    if len(on) > 0:
+        comment += '、'.join(on)+small_separator
+    else:
+        comment += '-'+small_separator
+
     comment += '**Kunyomi:** '
     kun = []
     for reading in rm.iter('reading'):
         if reading.attrib['r_type'] == 'ja_kun':
             kun.append(reading.text)
-    comment += '、'.join(kun)+'  \n'
-    comment += 'Nanori: '
+    if len(kun) > 0:
+        comment += '、'.join(kun)+small_separator
+    else:
+        comment += '-'+small_separator
+    comment += '**Nanori:** '
     nanori = []
     for reading in rm.iter('nanori'):
         nanori.append(reading.text)
-    comment += '、'.join(nanori)+'\n\n'
+    if len(nanori) > 0:
+        comment += '、'.join(nanori)+big_separator
+    else:
+        comment += '-'+big_separator
 
-    misc = data.find('misc')
-    misc_info = []
-    if misc.find('grade') is not None:
-        misc_info.append('**Grade:** '+misc.find('grade').text)
-    if misc.find('stroke_count') is not None:
-        misc_info.append('**Stroke Count:** '+misc.find('stroke_count').text)
-    if misc.find('freq') is not None:
-        misc_info.append('**Frequncy:** '+misc.find('freq').text)
-    if misc.find('jlpt') is not None:
-        misc_info.append('**JLPT:** '+misc.find('jlpt').text)
+    if not compact:
+        misc = data.find('misc')
+        misc_info = []
+        if misc.find('grade') is not None:
+            misc_info.append('**Grade:** '+misc.find('grade').text)
+        if misc.find('stroke_count') is not None:
+            misc_info.append(
+                '**Stroke Count:** '+misc.find('stroke_count').text
+            )
+        if misc.find('freq') is not None:
+            misc_info.append('**Frequency:** '+misc.find('freq').text)
+        if misc.find('jlpt') is not None:
+            misc_info.append('**JLPT:** '+misc.find('jlpt').text)
 
-    if len(misc_info) > 0:
-        comment += ', '.join(misc_info)+'\n\n'
+        if len(misc_info) > 0:
+            comment += ', '.join(misc_info)
+            if compact:
+                comment += '  \n'
+            else:
+                comment += '\n\n'
 
-    if kanji in radicals:
-        comment += '\n\n**Radicals:** '
-        for rad in radicals[kanji]:
-            comment += rad+' '
-        comment = comment[:-2]
+    parts_info = []
+    if data.find('radical') is not None:
+        for rv in data.find('radical').findall('rad_value'):
+            if rv.attrib['rad_type'] == 'classical':
+                parts_info.append('**Radical:** '+radicals[int(rv.text)-1])
+    if kanji in components:
+        parts_info.append('**Components:** '+' '.join(components[kanji]))
+    comment += ' '.join(parts_info)
 
     img = get_stroke_image_url(kanji)
     if img is not None:
-        comment += '\n\n[Stroke Order]('+img+')'
+        if compact:
+            comment += ' '
+        else:
+            comment += '\n\n'
+        comment += '[Stroke Order]('+img+')'
 
     return comment
 
@@ -190,15 +235,15 @@ def reply_to_mentions():
     for mention in reddit.inbox.stream():
         print(
             'Reading mention by /u/'+mention.author.name,
-            'in /r/'+mention.subreddit.display_name
+            # 'in /r/'+mention.subreddit.display_name
         )
         for line in mention.body.split('\n'):
             if '/u/'+account in line:
-                kanji = extract_kanji(line)[:5]
+                kanji = extract_kanji(line)[:8]
                 if len(kanji) > 0:
                     print('Found kanji:', ' '.join(kanji))
                     print('Sending response...', end='')
-                    reply = [get_kanji_info(k) for k in kanji]
+                    reply = [get_kanji_info(k, len(kanji) > 1) for k in kanji]
                     comment = '\n\n---\n\n'.join(reply)
                     comment += '\n\n---\n\n'+footer
                     mention.reply(comment)
