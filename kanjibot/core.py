@@ -148,10 +148,18 @@ def get_kanji_info(kanji):
     comment += '、'.join(nanori)+'\n\n'
 
     misc = data.find('misc')
-    comment += '**Grade:** '+misc.find('grade').text
-    comment += ',  **Stroke Count:** '+misc.find('stroke_count').text
-    comment += ',  **Frequncy:** '+misc.find('freq').text
-    comment += ',  **JLPT:** '+misc.find('jlpt').text
+    misc_info = []
+    if misc.find('grade') is not None:
+        misc_info.append('**Grade:** '+misc.find('grade').text)
+    if misc.find('stroke_count') is not None:
+        misc_info.append('**Stroke Count:** '+misc.find('stroke_count').text)
+    if misc.find('freq') is not None:
+        misc_info.append('**Frequncy:** '+misc.find('freq').text)
+    if misc.find('jlpt') is not None:
+        misc_info.append('**JLPT:** '+misc.find('jlpt').text)
+
+    if len(misc_info) > 0:
+        comment += ', '.join(misc_info)+'\n\n'
 
     if kanji in radicals:
         comment += '\n\n**Radicals:** '
@@ -186,7 +194,7 @@ def reply_to_mentions():
         )
         for line in mention.body.split('\n'):
             if '/u/'+account in line:
-                kanji = extract_kanji(line)
+                kanji = extract_kanji(line)[:5]
                 if len(kanji) > 0:
                     print('Found kanji:', ' '.join(kanji))
                     print('Sending response...', end='')
