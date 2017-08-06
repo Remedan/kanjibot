@@ -41,13 +41,13 @@ def load_kanji_data():
     print('Reading kradfile... ', end='')
     with open('jp-data/kradfile', 'r') as f:
         for line in f:
-            parts = line[:-1].split(' ')
+            parts = line.strip().split(' ')
             radicals[parts[0]] = parts[2:]
     print('done')
     print('Reading kradfile2... ', end='')
     with open('jp-data/kradfile2', 'r') as f:
         for line in f:
-            parts = line[:-1].split(' ')
+            parts = line.strip().split(' ')
             radicals[parts[0]] = parts[2:]
     print('done')
     pass
