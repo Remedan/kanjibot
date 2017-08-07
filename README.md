@@ -12,7 +12,6 @@ For example:
 * ability to recognize words, not just kanji
 * add 'words that this kanji is a part of'
 * links to relevant dictionaries/websites
-* preview kanji in a nice font
 
 ## Dictionary Data
 

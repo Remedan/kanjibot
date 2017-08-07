@@ -23,6 +23,10 @@ import os.path
 import xml.etree.ElementTree as ET
 import requests
 import praw
+from io import BytesIO
+from PIL import Image
+from PIL import ImageDraw
+from PIL import ImageFont
 
 
 config = None
@@ -82,6 +86,42 @@ def extract_kanji(string):
 
     return list(filter(lambda c: is_kanji(c), string))
 
+def upload_to_imgur(image, title=None):
+    ''' Uploads an image to imgur and returns its URL. '''
+    client_id = config['kanji-bot']['imgur_id']
+    url = 'https://api.imgur.com/3/image'
+    response = requests.post(
+        url,
+        headers={'Authorization': 'Client-ID '+client_id},
+        data={
+            'image': image,
+            'type': 'base64',
+            'title': title
+        }
+    )
+    response_data = json.loads(response.text)
+    if response_data['success']:
+        return response_data['data']['link']
+    else:
+        print('Imgur upload failed!')
+        return None
+
+def get_preview_image_url(kanji):
+    ''' Uploads kanji image to imgur and returns its url. '''
+
+    image = Image.new("RGBA", (500, 250), (255, 255, 255))
+    draw = ImageDraw.Draw(image)
+    font_gothic = ImageFont.truetype("jp-data/IPAexfont/ipaexg.ttf", 200)
+    font_mincho = ImageFont.truetype("jp-data/IPAexfont/ipaexm.ttf", 200)
+
+    draw.text((25, 25), kanji, (0,0,0), font=font_gothic)
+    draw.text((275, 25), kanji, (0,0,0), font=font_mincho)
+
+    buff = BytesIO()
+    image.save(buff, format="PNG")
+    img_base64 = base64.b64encode(buff.getvalue())
+
+    return upload_to_imgur(img_base64, kanji+' preview')
 
 def get_stroke_image_url(kanji):
     ''' Uploads kanji stroke order image to imgur and returns its url. '''
@@ -89,25 +129,9 @@ def get_stroke_image_url(kanji):
     path = 'jp-data/strokes/'+kanji+'.png'
     if os.path.isfile(path):
         with open(path, 'rb') as f:
-            client_id = config['kanji-bot']['imgur_id']
-            url = 'https://api.imgur.com/3/image'
             img = f.read()
             img_base64 = base64.b64encode(img)
-            response = requests.post(
-                url,
-                headers={'Authorization': 'Client-ID '+client_id},
-                data={
-                    'image': img_base64,
-                    'type': 'base64',
-                    'title': kanji+' stroke order'
-                }
-            )
-            response_data = json.loads(response.text)
-            if response_data['success']:
-                return response_data['data']['link']
-            else:
-                print('Imgur upload failed!')
-                return None
+            return upload_to_imgur(img_base64, kanji+' stroke order')
     else:
         return None
 
@@ -136,7 +160,7 @@ def get_kanji_info(kanji, compact=False):
     comment = ''
     if not compact:
         comment += '##'
-    comment += kanji
+    comment += '['+kanji+']('+get_preview_image_url(kanji)+')'
     if compact:
         comment += ' '
     else:
