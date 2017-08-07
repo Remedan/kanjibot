@@ -110,13 +110,18 @@ def upload_to_imgur(image, title=None):
 def get_preview_image_url(kanji):
     ''' Uploads kanji image to imgur and returns its url. '''
 
-    image = Image.new("RGBA", (500, 250), (255, 255, 255))
+    image = Image.new("RGBA", (1000, 250), (255, 255, 255))
     draw = ImageDraw.Draw(image)
-    font_gothic = ImageFont.truetype("jp-data/IPAexfont/ipaexg.ttf", 200)
-    font_mincho = ImageFont.truetype("jp-data/IPAexfont/ipaexm.ttf", 200)
 
-    draw.text((25, 25), kanji, (0, 0, 0), font=font_gothic)
-    draw.text((275, 25), kanji, (0, 0, 0), font=font_mincho)
+    ipag = ImageFont.truetype("jp-data/fonts/IPAexfont/ipaexg.ttf", 200)
+    ipam = ImageFont.truetype("jp-data/fonts/IPAexfont/ipaexm.ttf", 200)
+    nagayama = ImageFont.truetype("jp-data/fonts/nagayama_kai08.otf", 200)
+    sanafon = ImageFont.truetype("jp-data/fonts/SNsanafon/SNsanafon.ttf", 200)
+
+    draw.text((25, 25), kanji, (0, 0, 0), font=ipag)
+    draw.text((275, 25), kanji, (0, 0, 0), font=ipam)
+    draw.text((525, 25), kanji, (0, 0, 0), font=nagayama)
+    draw.text((775, 25), kanji, (0, 0, 0), font=sanafon)
 
     buff = BytesIO()
     image.save(buff, format="PNG")
