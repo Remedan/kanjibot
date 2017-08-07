@@ -61,7 +61,6 @@ def load_kanji_data():
             parts = line.strip().split(' ')
             components[parts[0]] = parts[2:]
     print('done')
-    pass
 
 
 def is_kanji(character):
@@ -86,6 +85,7 @@ def extract_kanji(string):
 
     return list(filter(lambda c: is_kanji(c), string))
 
+
 def upload_to_imgur(image, title=None):
     ''' Uploads an image to imgur and returns its URL. '''
     client_id = config['kanji-bot']['imgur_id']
@@ -106,6 +106,7 @@ def upload_to_imgur(image, title=None):
         print('Imgur upload failed!')
         return None
 
+
 def get_preview_image_url(kanji):
     ''' Uploads kanji image to imgur and returns its url. '''
 
@@ -114,14 +115,15 @@ def get_preview_image_url(kanji):
     font_gothic = ImageFont.truetype("jp-data/IPAexfont/ipaexg.ttf", 200)
     font_mincho = ImageFont.truetype("jp-data/IPAexfont/ipaexm.ttf", 200)
 
-    draw.text((25, 25), kanji, (0,0,0), font=font_gothic)
-    draw.text((275, 25), kanji, (0,0,0), font=font_mincho)
+    draw.text((25, 25), kanji, (0, 0, 0), font=font_gothic)
+    draw.text((275, 25), kanji, (0, 0, 0), font=font_mincho)
 
     buff = BytesIO()
     image.save(buff, format="PNG")
     img_base64 = base64.b64encode(buff.getvalue())
 
     return upload_to_imgur(img_base64, kanji+' preview')
+
 
 def get_stroke_image_url(kanji):
     ''' Uploads kanji stroke order image to imgur and returns its url. '''
