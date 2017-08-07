@@ -16,13 +16,13 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 '''
 
-import praw
 import base64
-import requests
 import json
 import configparser
 import os.path
 import xml.etree.ElementTree as ET
+import requests
+import praw
 
 
 config = None
@@ -130,7 +130,7 @@ def get_kanji_info(kanji, compact=False):
         small_separator = ' '
         big_separator = '  \n'
     else:
-        small_separator = ' \n'
+        small_separator = '  \n'
         big_separator = '\n\n'
 
     comment = ''
