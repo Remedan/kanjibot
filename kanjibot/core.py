@@ -264,7 +264,7 @@ def reply_to_mentions():
             # 'in /r/'+mention.subreddit.display_name
         )
         for line in mention.body.split('\n'):
-            if '/u/'+account in line:
+            if 'u/'+account in line:
                 kanji = extract_kanji(line)[:8]
                 if len(kanji) > 0:
                     print('Found kanji:', ' '.join(kanji))
