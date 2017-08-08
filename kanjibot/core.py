@@ -24,6 +24,7 @@ import xml.etree.ElementTree as ET
 import requests
 import praw
 from io import BytesIO
+from collections import OrderedDict
 from PIL import Image
 from PIL import ImageDraw
 from PIL import ImageFont
@@ -42,7 +43,6 @@ def load_kanji_data():
     with open('jp-data/radicals', 'r') as f:
         global radicals
         radicals = f.read().strip()
-        print(len(radicals))
     print('done')
     print('Reading kanjidic2.xml... ', end='')
     tree = ET.parse('jp-data/kanjidic2.xml')
@@ -110,13 +110,18 @@ def upload_to_imgur(image, title=None):
 def get_preview_image_url(kanji):
     ''' Uploads kanji image to imgur and returns its url. '''
 
-    image = Image.new("RGBA", (500, 250), (255, 255, 255))
+    image = Image.new("RGBA", (1000, 250), (255, 255, 255))
     draw = ImageDraw.Draw(image)
-    font_gothic = ImageFont.truetype("jp-data/IPAexfont/ipaexg.ttf", 200)
-    font_mincho = ImageFont.truetype("jp-data/IPAexfont/ipaexm.ttf", 200)
 
-    draw.text((25, 25), kanji, (0, 0, 0), font=font_gothic)
-    draw.text((275, 25), kanji, (0, 0, 0), font=font_mincho)
+    ipag = ImageFont.truetype("jp-data/fonts/IPAexfont/ipaexg.ttf", 200)
+    ipam = ImageFont.truetype("jp-data/fonts/IPAexfont/ipaexm.ttf", 200)
+    nagayama = ImageFont.truetype("jp-data/fonts/nagayama_kai08.otf", 200)
+    sanafon = ImageFont.truetype("jp-data/fonts/SNsanafon/SNsanafon.ttf", 200)
+
+    draw.text((25, 25), kanji, (0, 0, 0), font=ipag)
+    draw.text((275, 25), kanji, (0, 0, 0), font=ipam)
+    draw.text((525, 25), kanji, (0, 0, 0), font=nagayama)
+    draw.text((775, 25), kanji, (0, 0, 0), font=sanafon)
 
     buff = BytesIO()
     image.save(buff, format="PNG")
@@ -259,13 +264,14 @@ def reply_to_mentions():
 
     print('Connected to reddit, waiting for summons...')
     for mention in reddit.inbox.stream():
-        print(
-            'Reading mention by /u/'+mention.author.name,
-            # 'in /r/'+mention.subreddit.display_name
-        )
+        print('Reading mention by /u/'+mention.author.name, end='')
+        if hasattr(mention.subreddit, 'display_name'):
+            print('in /r/'+mention.subreddit.display_name)
+        else:
+            print()
         for line in mention.body.split('\n'):
             if 'u/'+account in line:
-                kanji = extract_kanji(line)[:8]
+                kanji = OrderedDict.fromkeys(list(extract_kanji(line)[:8]))
                 if len(kanji) > 0:
                     print('Found kanji:', ' '.join(kanji))
                     print('Sending response...', end='')
