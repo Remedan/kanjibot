@@ -23,6 +23,7 @@ import os.path
 import xml.etree.ElementTree as ET
 import requests
 import praw
+import mysql.connector
 from io import BytesIO
 from collections import OrderedDict
 from PIL import Image
@@ -30,37 +31,302 @@ from PIL import ImageDraw
 from PIL import ImageFont
 
 
-config = None
-kanji_data = None
-radicals = ''
-components = {}
+class Database:
+    '''
+    This class is used to import and retrieve language data to/from the db.
+    '''
+
+    def __init__(self, host, db_name, user, password):
+        try:
+            self.cnx = mysql.connector.connect(
+                user=user,
+                password=password,
+                host=host,
+                database=db_name,
+                use_unicode=True,
+                charset='utf8mb4'
+            )
+        except mysql.connector.Error as err:
+            print(err)
+
+    def __del__(self):
+        self.cnx.close()
+
+    def _get_cursor(self):
+        cursor = self.cnx.cursor()
+        cursor.execute('SET NAMES utf8mb4')
+        cursor.execute("SET CHARACTER SET utf8mb4")
+        cursor.execute("SET character_set_connection=utf8mb4")
+
+        return cursor
+
+    def _create_tables(self):
+        tables = [
+            (
+                'CREATE TABLE `kanji_radical` ('
+                '  `radical_id` int(11) NOT NULL AUTO_INCREMENT,'
+                '  `radical_character` char(1) NOT NULL,'
+                '  PRIMARY KEY (`radical_id`),'
+                '  UNIQUE KEY `radical_character` (`radical_character`)'
+                ') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;'
+            ),
+            (
+                'CREATE TABLE `kanji` ('
+                '  `kanji_id` int(11) NOT NULL AUTO_INCREMENT,'
+                '  `kanji_character` char(1) NOT NULL,'
+                '  `radical_id` int(11) DEFAULT NULL,'
+                '  `grade` int(11) DEFAULT NULL,'
+                '  `stroke_count` int(11) DEFAULT NULL,'
+                '  `frequency` int(11) DEFAULT NULL,'
+                '  `jlpt_level` int(11) DEFAULT NULL,'
+                '  PRIMARY KEY (`kanji_id`),'
+                '  UNIQUE KEY `kanji_character` (`kanji_character`),'
+                '  KEY `radical_id` (`radical_id`),'
+                '  CONSTRAINT `kanji_ibfk_2` FOREIGN KEY (`radical_id`)'
+                '  REFERENCES `kanji_radical` (`radical_id`) ON UPDATE CASCADE'
+                ') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;'
+            ),
+            (
+                'CREATE TABLE `kanji_component` ('
+                '  `kanji_id` int(11) NOT NULL,'
+                '  `component_character` char(1) NOT NULL,'
+                '  KEY `kanji_id` (`kanji_id`),'
+                '  CONSTRAINT `kanji_component_ibfk_2` FOREIGN KEY'
+                '  (`kanji_id`) REFERENCES `kanji` (`kanji_id`)'
+                '  ON DELETE CASCADE ON UPDATE CASCADE'
+                ') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;'
+            ),
+            (
+                'CREATE TABLE `kanji_meaning` ('
+                '  `kanji_id` int(11) NOT NULL,'
+                '  `meaning_text` text NOT NULL,'
+                '  KEY `kanji_id` (`kanji_id`),'
+                '  CONSTRAINT `kanji_meaning_ibfk_2` FOREIGN KEY (`kanji_id`)'
+                '  REFERENCES `kanji` (`kanji_id`)'
+                '  ON DELETE CASCADE ON UPDATE CASCADE'
+                ') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;'
+            ),
+            (
+                'CREATE TABLE `kanji_reading` ('
+                '  `kanji_id` int(11) NOT NULL,'
+                '  `reading_text` text NOT NULL,'
+                '  `reading_type` int(1) NOT NULL,'
+                '  KEY `kanji_id` (`kanji_id`),'
+                '  CONSTRAINT `kanji_reading_ibfk_1` FOREIGN KEY (`kanji_id`)'
+                '  REFERENCES `kanji` (`kanji_id`)'
+                ') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;'
+            )
+        ]
+        cursor = self._get_cursor()
+        for table in tables:
+            try:
+                cursor.execute(table)
+            except mysql.connector.Error as err:
+                print(err)
+        cursor.close()
+
+    def _load_radicals(self):
+        cursor = self._get_cursor()
+        with open('jp-data/radicals', 'r') as f:
+            for radical in f.read().strip():
+                cursor.execute(
+                    'INSERT INTO `kanji_radical` (`radical_character`)'
+                    'VALUES (%s)',
+                    (radical,)
+                )
+        self.cnx.commit()
+        cursor.close()
+
+    def _load_kanji(self):
+        tree = ET.parse('jp-data/kanjidic2.xml')
+        kanji_data = tree.getroot()
+        components = {}
+        with open('jp-data/kradfile', 'r') as f:
+            for line in f:
+                parts = line.strip().split(' ')
+                components[parts[0]] = parts[2:]
+        with open('jp-data/kradfile2', 'r') as f:
+            for line in f:
+                parts = line.strip().split(' ')
+                components[parts[0]] = parts[2:]
+
+        cursor = self._get_cursor()
+        for kanji in kanji_data.iter('character'):
+            literal = kanji.find('literal').text
+            meanings = []
+            for meaning in kanji.iter('meaning'):
+                if 'm_lang' not in meaning.attrib:
+                    meanings.append(meaning.text)
+            on = []
+            kun = []
+            for reading in kanji.iter('reading'):
+                if reading.attrib['r_type'] == 'ja_on':
+                    on.append(reading.text)
+                elif reading.attrib['r_type'] == 'ja_kun':
+                    kun.append(reading.text)
+            nanori = []
+            for reading in kanji.iter('nanori'):
+                nanori.append(reading.text)
+            misc = kanji.find('misc')
+            grade = misc.find('grade')
+            if grade is not None:
+                grade = int(grade.text)
+            stroke_count = misc.find('stroke_count')
+            if stroke_count is not None:
+                stroke_count = int(stroke_count.text)
+            frequency = misc.find('freq')
+            if frequency is not None:
+                frequency = int(frequency.text)
+            jlpt = misc.find('jlpt')
+            if jlpt is not None:
+                jlpt = int(jlpt.text)
+            radical = None
+            for rv in kanji.find('radical').findall('rad_value'):
+                if rv.attrib['rad_type'] == 'classical':
+                    radical = int(rv.text)
+
+            # TODO There are a few characters that even utf8mb4 can't store.
+            #      I don't really know what to do about them.
+            try:
+                cursor.execute(
+                    'INSERT INTO `kanji` ('
+                    '  `kanji_character`,'
+                    '  `radical_id`,'
+                    '  `grade`,'
+                    '  `stroke_count`,'
+                    '  `frequency`,'
+                    '  `jlpt_level`'
+                    ') VALUES (%s, %s, %s, %s, %s, %s)',
+                    (literal, radical, grade, stroke_count, frequency, jlpt)
+                )
+            except mysql.connector.Error as err:
+                print('Error inserting data about \''+literal+'\':')
+                print(err)
+                continue
+
+            kanji_id = cursor.lastrowid
+            for m in meanings:
+                cursor.execute(
+                    'INSERT INTO `kanji_meaning`'
+                    '(`kanji_id`, `meaning_text`)'
+                    'VALUES (%s, %s)',
+                    (kanji_id, m)
+                )
+            for o in on:
+                cursor.execute(
+                    'INSERT INTO `kanji_reading`'
+                    '(`kanji_id`, `reading_text`, `reading_type`)'
+                    'VALUES (%s, %s, 0)',
+                    (kanji_id, o)
+                )
+            for k in kun:
+                cursor.execute(
+                    'INSERT INTO `kanji_reading`'
+                    '(`kanji_id`, `reading_text`, `reading_type`)'
+                    'VALUES (%s, %s, 1)',
+                    (kanji_id, k)
+                )
+            for n in nanori:
+                cursor.execute(
+                    'INSERT INTO `kanji_reading`'
+                    '(`kanji_id`, `reading_text`, `reading_type`)'
+                    'VALUES (%s, %s, 2)',
+                    (kanji_id, n)
+                )
+            if literal in components:
+                for c in components[literal]:
+                    cursor.execute(
+                        'INSERT INTO `kanji_component`'
+                        '(`kanji_id`, `component_character`)'
+                        'VALUES (%s, %s)',
+                        (kanji_id, c)
+                    )
+
+            self.cnx.commit()
+
+        cursor.close()
+
+    def fill_database(self):
+        ''' Fills an empty database with language data. '''
+
+        self._create_tables()
+        self._load_radicals()
+        self._load_kanji()
+
+    def get_kanji_data(self, kanji):
+        ''' Returns a dict with info about a kanji. '''
+
+        cursor = self._get_cursor()
+        cursor.execute(
+            'SELECT `kanji_id`, `kanji_character`, `grade`, `stroke_count`,'
+            '       `frequency`, `jlpt_level`, `radical_character`'
+            'FROM `kanji` LEFT JOIN `kanji_radical` USING (`radical_id`)'
+            'WHERE `kanji_character` = %s',
+            (kanji,)
+        )
+        data = {}
+        rows = list(cursor)
+        if not rows:
+            return None
+
+        (
+            kanji_id,
+            data['literal'],
+            data['grade'],
+            data['stroke_count'],
+            data['frequency'],
+            data['jlpt'],
+            data['radical']
+        ) = rows[0]
+        cursor.execute(
+            'SELECT `meaning_text` FROM `kanji_meaning`'
+            'WHERE `kanji_id` = %s',
+            (kanji_id,)
+        )
+        data['meaning'] = [row[0] for row in cursor]
+        cursor.execute(
+            'SELECT `reading_text` FROM `kanji_reading`'
+            'WHERE `reading_type` = 0 AND `kanji_id` = %s',
+            (kanji_id,)
+        )
+        data['on'] = [row[0] for row in cursor]
+        cursor.execute(
+            'SELECT `reading_text` FROM `kanji_reading`'
+            'WHERE `reading_type` = 1 AND `kanji_id` = %s',
+            (kanji_id,)
+        )
+        data['kun'] = [row[0] for row in cursor]
+        cursor.execute(
+            'SELECT `reading_text` FROM `kanji_reading`'
+            'WHERE `reading_type` = 2 AND `kanji_id` = %s',
+            (kanji_id,)
+        )
+        data['nanori'] = [row[0] for row in cursor]
+        cursor.execute(
+            'SELECT `component_character` FROM `kanji_component`'
+            'WHERE `kanji_id` = %s',
+            (kanji_id,)
+        )
+        data['components'] = [row[0] for row in cursor]
+
+        cursor.close()
+        return data
 
 
-def load_kanji_data():
-    ''' Loads dictionary data into memory. '''
+config = configparser.ConfigParser()
+config.read('kanjibot.ini')
+db = Database(
+    config['kanji-bot']['db_host'],
+    config['kanji-bot']['db_name'],
+    config['kanji-bot']['db_user'],
+    config['kanji-bot']['db_password'],
+)
 
-    print('Reading radicals... ', end='')
-    with open('jp-data/radicals', 'r') as f:
-        global radicals
-        radicals = f.read().strip()
-    print('done')
-    print('Reading kanjidic2.xml... ', end='')
-    tree = ET.parse('jp-data/kanjidic2.xml')
-    global kanji_data
-    kanji_data = tree.getroot()
-    print('done')
-    print('Reading kradfile... ', end='')
-    with open('jp-data/kradfile', 'r') as f:
-        for line in f:
-            parts = line.strip().split(' ')
-            components[parts[0]] = parts[2:]
-    print('done')
-    print('Reading kradfile2... ', end='')
-    with open('jp-data/kradfile2', 'r') as f:
-        for line in f:
-            parts = line.strip().split(' ')
-            components[parts[0]] = parts[2:]
-    print('done')
+
+def init_database():
+    ''' Fills the database with data. Should be run only once. '''
+
+    db.fill_database()
 
 
 def is_kanji(character):
@@ -88,6 +354,7 @@ def extract_kanji(string):
 
 def upload_to_imgur(image, title=None):
     ''' Uploads an image to imgur and returns its URL. '''
+
     client_id = config['kanji-bot']['imgur_id']
     url = 'https://api.imgur.com/3/image'
     response = requests.post(
@@ -149,11 +416,7 @@ def get_kanji_info(kanji, compact=False):
     Will also upload a stroke order image to imgur.
     '''
 
-    data = None
-    for character in kanji_data.findall('character'):
-        if character.find('literal').text == kanji:
-            data = character
-            break
+    data = db.get_kanji_data(kanji)
     if data is None:
         return '##Couldn\'t find data for kanji \''+kanji+'\''
 
@@ -173,55 +436,35 @@ def get_kanji_info(kanji, compact=False):
     else:
         comment += '\n\n'
 
-    rm = data.find('reading_meaning')
     comment += '**Meaning:** '
-    meanings = []
-    for meaning in rm.iter('meaning'):
-        if 'm_lang' not in meaning.attrib:
-            meanings.append(meaning.text)
-    comment += ', '.join(meanings)+big_separator
+    comment + ', '.join(data['meaning'])+big_separator
 
     comment += '**Onyomi:** '
-    on = []
-    for reading in rm.iter('reading'):
-        if reading.attrib['r_type'] == 'ja_on':
-            on.append(reading.text)
-    if len(on) > 0:
-        comment += '、'.join(on)+small_separator
+    if len(data['on']) > 0:
+        comment += '、'.join(data['on'])+small_separator
     else:
         comment += '-'+small_separator
-
     comment += '**Kunyomi:** '
-    kun = []
-    for reading in rm.iter('reading'):
-        if reading.attrib['r_type'] == 'ja_kun':
-            kun.append(reading.text)
-    if len(kun) > 0:
-        comment += '、'.join(kun)+small_separator
+    if len(data['kun']) > 0:
+        comment += '、'.join(data['kun'])+small_separator
     else:
         comment += '-'+small_separator
     comment += '**Nanori:** '
-    nanori = []
-    for reading in rm.iter('nanori'):
-        nanori.append(reading.text)
-    if len(nanori) > 0:
-        comment += '、'.join(nanori)+big_separator
+    if len(data['nanori']) > 0:
+        comment += '、'.join(data['nanori'])+big_separator
     else:
         comment += '-'+big_separator
 
     if not compact:
-        misc = data.find('misc')
         misc_info = []
-        if misc.find('grade') is not None:
-            misc_info.append('**Grade:** '+misc.find('grade').text)
-        if misc.find('stroke_count') is not None:
-            misc_info.append(
-                '**Stroke Count:** '+misc.find('stroke_count').text
-            )
-        if misc.find('freq') is not None:
-            misc_info.append('**Frequency:** '+misc.find('freq').text)
-        if misc.find('jlpt') is not None:
-            misc_info.append('**JLPT:** '+misc.find('jlpt').text)
+        if data['grade'] is not None:
+            misc_info.append('**Grade:** '+str(data['grade']))
+        if data['stroke_count'] is not None:
+            misc_info.append('**Stroke Count:** '+str(data['stroke_count']))
+        if data['frequency'] is not None:
+            misc_info.append('**Frequency:** '+str(data['frequency']))
+        if data['jlpt'] is not None:
+            misc_info.append('**JLPT:** '+str(data['jlpt']))
 
         if len(misc_info) > 0:
             comment += ', '.join(misc_info)
@@ -231,12 +474,10 @@ def get_kanji_info(kanji, compact=False):
                 comment += '\n\n'
 
     parts_info = []
-    if data.find('radical') is not None:
-        for rv in data.find('radical').findall('rad_value'):
-            if rv.attrib['rad_type'] == 'classical':
-                parts_info.append('**Radical:** '+radicals[int(rv.text)-1])
-    if kanji in components:
-        parts_info.append('**Components:** '+' '.join(components[kanji]))
+    if data['radical'] is not None:
+        parts_info.append('**Radical:** '+data['radical'])
+    if len(data['components']) > 0:
+        parts_info.append('**Components:** '+' '.join(data['components']))
     comment += ' '.join(parts_info)
 
     img = get_stroke_image_url(kanji)
@@ -253,11 +494,6 @@ def get_kanji_info(kanji, compact=False):
 def reply_to_mentions():
     ''' Continuously reads reddit mentions and replies to them. '''
 
-    load_kanji_data()
-
-    global config
-    config = configparser.ConfigParser()
-    config.read('kanjibot.ini')
     account = config['kanji-bot']['reddit_account']
     footer = config['kanji-bot']['footer']
     reddit = praw.Reddit('kanji-bot')

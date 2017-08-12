@@ -1,12 +1,32 @@
 # Kanjibot 
 
-A simple reddit bot that will reply with kanji information when called. To summon the bot, simply mention its name along with some kanji on the same line.
+A simple Reddit bot that will reply with kanji information when called.
+
+## Usage
+
+To summon the bot, simply mention its name along with some kanji on the same line.
 
 For example:
 
     Let's see some kanji info!
     /u/kanji-bot 桜 酒
-   
+
+## Running the Code
+
+Kanjibot needs a MySQL database to store its data. Before starting it you need to edit `praw.ini` and `kanjibot.ini` and fill in Reddit, Imgur and db info. If you want the bot to post stroke order images, you need to obtain them as described [below](#stroke-order-images) and place them in `jp-data/strokes`.
+
+To fill the database with the data the bot needs, run:
+
+    python -m kanjibot --init-db
+
+_(Note: There are a few obscure characters that will fail to import into even utf8mb4 encoded table. I'm currently not sure what to do about this but it's not really a big issue.)_
+
+To start the bot, run:
+
+    python -m kanjibot
+
+The bot will continuously read its inbox and post replies. I recommend creating a simple systemd (or equivalent) service to daemonize it.
+
 ## Future Plans
 
 * ability to recognize words, not just kanji
