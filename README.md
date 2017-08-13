@@ -35,7 +35,7 @@ The bot will continuously read its inbox and post replies. I recommend creating 
 
 ## Dictionary Data
 
-This bot uses the [KANJIDIC](http://nihongo.monash.edu/kanjidic2/index.html) and [KRADFILE](http://nihongo.monash.edu//kradinf.html) dictionary files. These files are the property of the [Electronic Dictionary Research and Development Group](http://www.edrdg.org/), and are used in conformance with the Group's [licence](http://www.edrdg.org/edrdg/licence.html).
+This bot uses the [JMdict](http://www.edrdg.org/jmdict/edict_doc.html), [KANJIDIC](http://nihongo.monash.edu/kanjidic2/index.html) and [KRADFILE](http://nihongo.monash.edu//kradinf.html) dictionary files. These files are the property of the [Electronic Dictionary Research and Development Group](http://www.edrdg.org/), and are used in conformance with the Group's [licence](http://www.edrdg.org/edrdg/licence.html).
 
 ## Stroke Order Images
 
