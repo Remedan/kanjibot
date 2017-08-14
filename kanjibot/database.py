@@ -509,3 +509,91 @@ class Database:
 
         cursor.close()
         return data
+
+    def get_word_data(self, word):
+        cursor = self._get_cursor()
+        cursor.execute(
+            'SELECT `word_entry_id`'
+            ' FROM `word_entry`'
+            ' JOIN `word_entry_wording` USING (`word_entry_id`)'
+            ' WHERE `text` = %s',
+            (word,)
+        )
+        rows = list(cursor)
+        if not rows:
+            return None
+
+        data = []
+        for w in rows:
+            word_data = {'word': word}
+            entry_id = w[0]
+            cursor.execute(
+                'SELECT `wew_id`, `text` FROM `word_entry_wording`'
+                ' WHERE `word_entry_id` = %s',
+                (entry_id,)
+            )
+            word_data['alt_wording'] = []
+            for alt in list(cursor):
+                if alt[1] != word:
+                    alt_wording = {'text': alt[1]}
+                    cursor.execute(
+                        'SELECT `text` FROM `wew_info`'
+                        'WHERE `wew_id` = %s',
+                        (alt[0],)
+                    )
+                    alt_wording['info'] = list(cursor)
+                    word_data['alt_wording'].append(alt_wording)
+            data.append(word_data)
+            cursor.execute(
+                'SELECT `wer_id`, `reading` FROM `word_entry_reading`'
+                ' WHERE `word_entry_id` = %s',
+                (entry_id,)
+            )
+            word_data['reading'] = []
+            for r in list(cursor):
+                reading = {'text': r[1]}
+                cursor.execute(
+                    'SELECT `text` FROM `wer_info`'
+                    'WHERE `wer_id` = %s',
+                    (r[0],)
+                )
+                reading['info'] = list(cursor)
+                word_data['reading'].append(reading)
+            data.append(word_data)
+
+            cursor.execute(
+                'SELECT `wem_id` FROM `word_entry_meaning`'
+                ' WHERE `word_entry_id` = %s',
+                (entry_id,)
+            )
+            word_data['meaning'] = []
+            for m in list(cursor):
+                meaning = {}
+                cursor.execute(
+                    'SELECT `text` FROM `wem_part_of_speech`'
+                    'WHERE `wem_id` = %s',
+                    (m[0],)
+                )
+                meaning['pos'] = list(cursor)
+                cursor.execute(
+                    'SELECT `field` FROM `wem_field`'
+                    'WHERE `wem_id` = %s',
+                    (m[0],)
+                )
+                meaning['field'] = list(cursor)
+                cursor.execute(
+                    'SELECT `text` FROM `wem_gloss`'
+                    'WHERE `wem_id` = %s',
+                    (m[0],)
+                )
+                meaning['gloss'] = list(cursor)
+                cursor.execute(
+                    'SELECT `text` FROM `wem_misc`'
+                    'WHERE `wem_id` = %s',
+                    (m[0],)
+                )
+                meaning['misc'] = list(cursor)
+                word_data['meaning'].append(meaning)
+
+        cursor.close()
+        return data
