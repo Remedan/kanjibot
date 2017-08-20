@@ -1,15 +1,22 @@
 # Kanjibot 
 
-A simple Reddit bot that will reply with kanji information when called.
+A simple Reddit bot that will reply with information when called.
 
 ## Usage
 
-To summon the bot, simply mention its name along with some kanji on the same line.
+To summon the bot, simply mention its name along with some Japanese on the same line. Multiple items should be separated by , or 、 or spaces.
 
 For example:
 
-    Let's see some kanji info!
-    /u/kanji-bot 桜 酒
+    /u/kanji-bot 日、ありがとう
+
+The bot will look at each item as either a kanji character or a word. By default, it chooses automatically. You can force to it to pick either by putting `!kanji` or `!word` befor some items.
+
+For example:
+
+    /u/kanji-bot ①　!kanji ②　!word ③
+
+① will be interpreted automatically, ② as kanji and ③ as words or phrases. **You can put multiple items in place of ①, ② and ③!**
 
 ## Running the Code
 
@@ -26,12 +33,6 @@ To start the bot, run:
     python -m kanjibot
 
 The bot will continuously read its inbox and post replies. I recommend creating a simple systemd (or equivalent) service to daemonize it.
-
-## Future Plans
-
-* ability to recognize words, not just kanji
-* add 'words that this kanji is a part of'
-* links to relevant dictionaries/websites
 
 ## Dictionary Data
 
