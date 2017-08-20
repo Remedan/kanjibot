@@ -23,6 +23,7 @@ import os.path
 import re
 import requests
 import praw
+import prawcore
 import urllib
 from io import BytesIO
 from PIL import Image
@@ -320,23 +321,28 @@ def reply_to_mentions():
 
     print('Connected to reddit, waiting for summons...')
     for mention in reddit.inbox.stream():
-        print('Reading mention by /u/'+mention.author.name, end='')
-        if hasattr(mention.subreddit, 'display_name'):
-            print(' in /r/'+mention.subreddit.display_name)
-        else:
-            print()
-        for line in mention.body.split('\n'):
-            if 'u/'+account in line:
-                found = parse_line(line)
-                if found['kanji'] or found['words']:
-                    print('Sending response...', end='')
-                    info = [get_kanji_info(k) for k in found['kanji']]
-                    info = info + [get_word_info(w) for w in found['words']]
-                    comment = '\n\n---\n\n'.join(info)
-                    comment += '\n\n---\n\n'+footer
-                    mention.reply(comment)
-                    print(' done')
-                    break
+        for i in range(3):
+            try:
+                print('Reading mention by /u/'+mention.author.name, end='')
+                if hasattr(mention.subreddit, 'display_name'):
+                    print(' in /r/'+mention.subreddit.display_name)
                 else:
-                    print('No kanji found')
+                    print()
+                for line in mention.body.split('\n'):
+                    if 'u/'+account in line:
+                        found = parse_line(line)
+                        if found['kanji'] or found['words']:
+                            print('Sending response...', end='')
+                            info = [get_kanji_info(k) for k in found['kanji']]
+                            info += [get_word_info(w) for w in found['words']]
+                            comment = '\n\n---\n\n'.join(info)
+                            comment += '\n\n---\n\n'+footer
+                            mention.reply(comment)
+                            print(' done')
+                        else:
+                            print('No kanji found')
+                break
+            except prawcore.exceptions.RequestException as e:
+                print(e)
+
         mention.mark_read()
