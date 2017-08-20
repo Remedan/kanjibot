@@ -196,6 +196,8 @@ def get_word_info(word):
     '''
 
     data = db.get_word_data(word)
+    if data is None:
+        return '##Couldn\'t find data for word \''+word+'\''
 
     comments = []
     for word in data:
@@ -238,11 +240,19 @@ def parse_line(line):
     parts = re.split(delimiters, line)
 
     found = {'kanji': [], 'words': []}
+    kanji_mode = False
+    word_mode = False
     for word in parts:
         if not contains_japanese(word):
+            if word == '!kanji':
+                kanji_mode = True
+                word_mode = False
+            elif word == '!word' or word == '!words':
+                word_mode = True
+                kanji_mode = False
             continue
 
-        if db.is_word(word):
+        if word_mode or (not kanji_mode and db.is_word(word)):
             found['words'].append(word)
         else:
             found['kanji'] = found['kanji'] + extract_kanji(word)
