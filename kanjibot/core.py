@@ -209,6 +209,38 @@ def get_kanji_info(kanji, compact=False):
     return comment
 
 
+def get_word_info(word):
+    '''
+    Returns a markdown block with information about the specified kanji.
+    '''
+
+    data = db.get_word_data(word)
+
+    comments = []
+    for word in data:
+        comment = '##'+word['word']+'\n\n'
+
+        if word['alt_wording']:
+            comment += '**Alternate form:** '
+            comment += '、'.join(w['text'] for w in word['alt_wording'])+'\n\n'
+
+        if word['reading']:
+            comment += '**Reading:** '
+            comment += '、'.join(w['text'] for w in word['reading'])+'\n\n'
+
+        count = 1
+        for m in word['meaning']:
+            if m['gloss']:
+                comment += str(count)+'. '+', '.join(m['gloss'])
+                count += 1
+                if m['misc']:
+                    comment += '  \n_('+', '.join(m['misc'])+')_'
+
+        comments.append(comment)
+
+    return '\n\n---\n\n'.join(comments)
+
+
 def reply_to_mentions():
     ''' Continuously reads reddit mentions and replies to them. '''
 

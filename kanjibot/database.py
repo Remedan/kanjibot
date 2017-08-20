@@ -541,9 +541,9 @@ class Database:
                         'WHERE `wew_id` = %s',
                         (alt[0],)
                     )
-                    alt_wording['info'] = list(cursor)
+                    alt_wording['info'] = [row[0] for row in cursor]
                     word_data['alt_wording'].append(alt_wording)
-            data.append(word_data)
+
             cursor.execute(
                 'SELECT `wer_id`, `reading` FROM `word_entry_reading`'
                 ' WHERE `word_entry_id` = %s',
@@ -557,9 +557,8 @@ class Database:
                     'WHERE `wer_id` = %s',
                     (r[0],)
                 )
-                reading['info'] = list(cursor)
+                reading['info'] = [row[0] for row in cursor]
                 word_data['reading'].append(reading)
-            data.append(word_data)
 
             cursor.execute(
                 'SELECT `wem_id` FROM `word_entry_meaning`'
@@ -574,26 +573,28 @@ class Database:
                     'WHERE `wem_id` = %s',
                     (m[0],)
                 )
-                meaning['pos'] = list(cursor)
+                meaning['pos'] = [row[0] for row in cursor]
                 cursor.execute(
                     'SELECT `field` FROM `wem_field`'
                     'WHERE `wem_id` = %s',
                     (m[0],)
                 )
-                meaning['field'] = list(cursor)
+                meaning['field'] = [row[0] for row in cursor]
                 cursor.execute(
                     'SELECT `text` FROM `wem_gloss`'
                     'WHERE `wem_id` = %s',
                     (m[0],)
                 )
-                meaning['gloss'] = list(cursor)
+                meaning['gloss'] = [row[0] for row in cursor]
                 cursor.execute(
                     'SELECT `text` FROM `wem_misc`'
                     'WHERE `wem_id` = %s',
                     (m[0],)
                 )
-                meaning['misc'] = list(cursor)
+                meaning['misc'] = [row[0] for row in cursor]
                 word_data['meaning'].append(meaning)
+
+            data.append(word_data)
 
         cursor.close()
         return data
