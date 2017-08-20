@@ -23,6 +23,7 @@ import os.path
 import re
 import requests
 import praw
+import urllib
 from io import BytesIO
 from PIL import Image
 from PIL import ImageDraw
@@ -147,6 +148,22 @@ def get_stroke_image_url(kanji):
         return None
 
 
+def get_kanji_search_links(kanji):
+    links = '^^[\[jisho\]](http://jisho.org/search/'
+    links += urllib.parse.quote_plus(kanji+'#kanji')+')'
+    links += ' ^^[\[Wiktionary\]](http://en.wiktionary.org/wiki/'
+    links += urllib.parse.quote_plus(kanji+'#Japanese')+')'
+    links += ' ^^[\[Tatoeba\]](https://tatoeba.org/eng/sentences/'
+    links += 'search?from=jpn&to=eng&query='
+    links += urllib.parse.quote_plus(kanji)+')'
+    links += ' ^^[\[alc\]](http://eow.alc.co.jp/search?q='
+    links += urllib.parse.quote_plus(kanji)+')'
+    links += ' ^^[\[Glosbe\]](https://glosbe.com/ja/en/'
+    links += urllib.parse.quote_plus(kanji)+')'
+
+    return links
+
+
 def get_kanji_info(kanji):
     '''
     Returns a markdown block with information about the specified kanji.
@@ -154,10 +171,15 @@ def get_kanji_info(kanji):
     '''
 
     data = db.get_kanji_data(kanji)
-    if data is None:
-        return '##Couldn\'t find data for kanji \''+kanji+'\''
 
-    comment = '##['+kanji+']('+get_preview_image_url(kanji)+')\n\n'
+    comment = '##['+kanji+']('+get_preview_image_url(kanji)+')'
+    comment += ' '+get_kanji_search_links(kanji)+'\n\n'
+
+    if data is None:
+        return (
+            '##Couldn\'t find data for kanji \''+kanji+'\'\n\n'
+            + get_kanji_search_links(kanji)
+        )
 
     comment += '**Meaning:** '
     comment += ', '.join(data['meaning'])+'  \n'
@@ -192,6 +214,25 @@ def get_kanji_info(kanji):
     return comment
 
 
+def get_word_search_links(word):
+    links = '^^[\[jisho\]](http://jisho.org/search/'
+    links += urllib.parse.quote_plus(word)+')'
+    links += ' ^^[\[Wiktionary\]](http://en.wiktionary.org/wiki/'
+    links += urllib.parse.quote_plus(word+'#Japanese')+')'
+    links += ' ^^[\[Tatoeba\]](https://tatoeba.org/eng/sentences/'
+    links += 'search?from=jpn&to=eng&query='
+    links += urllib.parse.quote_plus(word)+')'
+    links += ' ^^[\[alc\]](http://eow.alc.co.jp/search?q='
+    links += urllib.parse.quote_plus(word)+')'
+    links += ' ^^[\[Glosbe\]](https://glosbe.com/ja/en/'
+    links += urllib.parse.quote_plus(word)+')'
+    links += ' ^^[\[OJAD\]]('
+    links += 'http://www.gavo.t.u-tokyo.ac.jp/ojad/search/index/word:'
+    links += urllib.parse.quote_plus(word)+')'
+
+    return links
+
+
 def get_word_info(word):
     '''
     Returns a markdown block with information about the specified kanji.
@@ -199,11 +240,15 @@ def get_word_info(word):
 
     data = db.get_word_data(word)
     if data is None:
-        return '##Couldn\'t find data for word \''+word+'\''
+        return (
+            '##Couldn\'t find data for word \''
+            + word+'\'\n\n'+get_word_search_links(word)
+        )
 
     comments = []
     for word in data:
-        comment = '##'+word['word']+'\n\n'
+        comment = '##'+word['word']
+        comment += ' '+get_word_search_links(word['word'])+'\n\n'
 
         info = []
         if word['alt_wording']:
