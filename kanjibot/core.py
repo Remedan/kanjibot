@@ -20,10 +20,10 @@ import base64
 import json
 import configparser
 import os.path
+import re
 import requests
 import praw
 from io import BytesIO
-from collections import OrderedDict
 from PIL import Image
 from PIL import ImageDraw
 from PIL import ImageFont
@@ -64,10 +64,27 @@ def is_kanji(character):
     )
 
 
+def is_kana(character):
+    ''' https://stackoverflow.com/a/30070664 '''
+
+    ranges = [
+        {"from": ord(u"\u3040"), "to": ord(u"\u309f")},
+        {"from": ord(u"\u30a0"), "to": ord(u"\u30ff")}
+    ]
+
+    return any(
+        [range['from'] <= ord(character) <= range['to'] for range in ranges]
+    )
+
+
 def extract_kanji(string):
     ''' Returns a list of all kanji in a string. '''
 
     return list(filter(lambda c: is_kanji(c), string))
+
+
+def contains_japanese(text):
+    return any(is_kanji(char) or is_kana(char) for char in text)
 
 
 def upload_to_imgur(image, title=None):
@@ -128,7 +145,7 @@ def get_stroke_image_url(kanji):
         return None
 
 
-def get_kanji_info(kanji, compact=False):
+def get_kanji_info(kanji):
     '''
     Returns a markdown block with information about the specified kanji.
     Will also upload a stroke order image to imgur.
@@ -138,58 +155,26 @@ def get_kanji_info(kanji, compact=False):
     if data is None:
         return '##Couldn\'t find data for kanji \''+kanji+'\''
 
-    if compact:
-        small_separator = ' '
-        big_separator = '  \n'
-    else:
-        small_separator = '  \n'
-        big_separator = '\n\n'
-
-    comment = ''
-    if not compact:
-        comment += '##'
-    comment += '['+kanji+']('+get_preview_image_url(kanji)+')'
-    if compact:
-        comment += ' '
-    else:
-        comment += '\n\n'
+    comment = '##['+kanji+']('+get_preview_image_url(kanji)+')\n\n'
 
     comment += '**Meaning:** '
-    comment + ', '.join(data['meaning'])+big_separator
+    comment += ', '.join(data['meaning'])+'  \n'
 
     comment += '**Onyomi:** '
     if len(data['on']) > 0:
-        comment += '、'.join(data['on'])+small_separator
+        comment += '、'.join(data['on'])+' '
     else:
-        comment += '-'+small_separator
+        comment += '- '
     comment += '**Kunyomi:** '
     if len(data['kun']) > 0:
-        comment += '、'.join(data['kun'])+small_separator
+        comment += '、'.join(data['kun'])+' '
     else:
-        comment += '-'+small_separator
+        comment += '- '
     comment += '**Nanori:** '
     if len(data['nanori']) > 0:
-        comment += '、'.join(data['nanori'])+big_separator
+        comment += '、'.join(data['nanori'])+'  \n'
     else:
-        comment += '-'+big_separator
-
-    if not compact:
-        misc_info = []
-        if data['grade'] is not None:
-            misc_info.append('**Grade:** '+str(data['grade']))
-        if data['stroke_count'] is not None:
-            misc_info.append('**Stroke Count:** '+str(data['stroke_count']))
-        if data['frequency'] is not None:
-            misc_info.append('**Frequency:** '+str(data['frequency']))
-        if data['jlpt'] is not None:
-            misc_info.append('**JLPT:** '+str(data['jlpt']))
-
-        if len(misc_info) > 0:
-            comment += ', '.join(misc_info)
-            if compact:
-                comment += '  \n'
-            else:
-                comment += '\n\n'
+        comment += '-  \n'
 
     parts_info = []
     if data['radical'] is not None:
@@ -200,11 +185,7 @@ def get_kanji_info(kanji, compact=False):
 
     img = get_stroke_image_url(kanji)
     if img is not None:
-        if compact:
-            comment += ' '
-        else:
-            comment += '\n\n'
-        comment += '[Stroke Order]('+img+')'
+        comment += ' [Stroke Order]('+img+')'
 
     return comment
 
@@ -220,13 +201,23 @@ def get_word_info(word):
     for word in data:
         comment = '##'+word['word']+'\n\n'
 
+        info = []
         if word['alt_wording']:
-            comment += '**Alternate form:** '
-            comment += '、'.join(w['text'] for w in word['alt_wording'])+'\n\n'
+            wording_info = '**Alternate form:** '
+            wording_info += '、'.join(
+                w['text'] for w in word['alt_wording']
+            )
+            info.append(wording_info)
 
-        if word['reading']:
-            comment += '**Reading:** '
-            comment += '、'.join(w['text'] for w in word['reading'])+'\n\n'
+        readings = [
+            r['text'] for r in word['reading'] if r['text'] != word['word']
+        ]
+        if readings:
+            reading_info = '**Reading:** '
+            reading_info += '、'.join(readings)
+            info.append(reading_info)
+        if info:
+            comment += '  \n'.join(info)+'\n\n'
 
         count = 1
         for m in word['meaning']:
@@ -235,10 +226,28 @@ def get_word_info(word):
                 count += 1
                 if m['misc']:
                     comment += '  \n_('+', '.join(m['misc'])+')_'
+                comment += '\n'
 
         comments.append(comment)
 
     return '\n\n---\n\n'.join(comments)
+
+
+def parse_line(line):
+    delimiters = '[\s,、]+'
+    parts = re.split(delimiters, line)
+
+    found = {'kanji': [], 'words': []}
+    for word in parts:
+        if not contains_japanese(word):
+            continue
+
+        if db.is_word(word):
+            found['words'].append(word)
+        else:
+            found['kanji'] = found['kanji'] + extract_kanji(word)
+
+    return found
 
 
 def reply_to_mentions():
@@ -252,21 +261,21 @@ def reply_to_mentions():
     for mention in reddit.inbox.stream():
         print('Reading mention by /u/'+mention.author.name, end='')
         if hasattr(mention.subreddit, 'display_name'):
-            print('in /r/'+mention.subreddit.display_name)
+            print(' in /r/'+mention.subreddit.display_name)
         else:
             print()
         for line in mention.body.split('\n'):
             if 'u/'+account in line:
-                kanji = OrderedDict.fromkeys(list(extract_kanji(line)[:8]))
-                if len(kanji) > 0:
-                    print('Found kanji:', ' '.join(kanji))
+                found = parse_line(line)
+                if found['kanji'] or found['words']:
                     print('Sending response...', end='')
-                    reply = [get_kanji_info(k, len(kanji) > 1) for k in kanji]
-                    comment = '\n\n---\n\n'.join(reply)
+                    info = [get_kanji_info(k) for k in found['kanji']]
+                    info = info + [get_word_info(w) for w in found['words']]
+                    comment = '\n\n---\n\n'.join(info)
                     comment += '\n\n---\n\n'+footer
                     mention.reply(comment)
                     print(' done')
                     break
                 else:
-                    print(' no kanji found')
+                    print('No kanji found')
         mention.mark_read()

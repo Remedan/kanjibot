@@ -514,14 +514,21 @@ class Database:
         cursor = self._get_cursor()
         cursor.execute(
             'SELECT `word_entry_id`'
-            ' FROM `word_entry`'
-            ' JOIN `word_entry_wording` USING (`word_entry_id`)'
+            ' FROM `word_entry_wording`'
             ' WHERE `text` = %s',
             (word,)
         )
         rows = list(cursor)
         if not rows:
-            return None
+            cursor.execute(
+                'SELECT `word_entry_id`'
+                ' FROM `word_entry_reading`'
+                ' WHERE `reading` = %s',
+                (word,)
+            )
+            rows = list(cursor)
+            if len(rows) != 1:
+                return None
 
         data = []
         for w in rows:
@@ -598,3 +605,22 @@ class Database:
 
         cursor.close()
         return data
+
+    def is_word(self, string):
+        cursor = self._get_cursor()
+
+        cursor.execute(
+            'SELECT * FROM `word_entry_wording`'
+            ' WHERE `text` = %s',
+            (string,)
+        )
+        result = bool(list(cursor))
+        cursor.execute(
+            'SELECT * FROM `word_entry_reading`'
+            ' WHERE `reading` = %s',
+            (string,)
+        )
+        result = len(list(cursor)) == 1 or result
+        cursor.close()
+
+        return result
