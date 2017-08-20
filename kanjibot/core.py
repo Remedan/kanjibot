@@ -84,6 +84,8 @@ def extract_kanji(string):
 
 
 def contains_japanese(text):
+    ''' Checks whether string contains japanese characters. '''
+
     return any(is_kanji(char) or is_kana(char) for char in text)
 
 
@@ -236,6 +238,8 @@ def get_word_info(word):
 
 
 def parse_line(line):
+    ''' Extracts kanji and words from a line of text. '''
+
     delimiters = '[\s,、]+'
     parts = re.split(delimiters, line)
 
@@ -252,10 +256,12 @@ def parse_line(line):
                 kanji_mode = False
             continue
 
-        if word_mode or (not kanji_mode and db.is_word(word)):
-            found['words'].append(word)
-        else:
+        if kanji_mode or (
+                not word_mode and (not db.is_word(word) or len(word) == 1)
+        ):
             found['kanji'] = found['kanji'] + extract_kanji(word)
+        else:
+            found['words'].append(word)
 
     return found
 
