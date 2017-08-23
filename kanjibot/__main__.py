@@ -6,7 +6,12 @@ def main(argv):
     if '--init-db' in argv:
         core.init_database()
     else:
-        core.reply_to_mentions()
+        while True:
+            try:
+                core.reply_to_mentions()
+            except Exception as e:
+                print(e)
+                time.sleep(10)
 
 
 if __name__ == '__main__':

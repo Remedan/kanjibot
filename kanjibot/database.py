@@ -39,9 +39,6 @@ class Database:
         except mysql.connector.Error as err:
             print(err)
 
-    def __del__(self):
-        self.cnx.close()
-
     def _get_cursor(self):
         cursor = self.cnx.cursor()
         cursor.execute('SET NAMES utf8mb4')
